@@ -19,8 +19,6 @@ import (
 	boostTypes "github.com/flashbots/go-boost-utils/types"
 )
 
-type BlacklistedAddresses []common.Address
-
 // Register adds catalyst APIs to the full node.
 func Register(stack *node.Node, backend *eth.Ethereum, ctx *cli.Context) error {
 	stack.RegisterAPIs([]rpc.API{
