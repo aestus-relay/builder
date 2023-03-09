@@ -1,6 +1,7 @@
 package blockvalidation
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 
@@ -8,19 +9,17 @@ import (
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/ethereum/go-ethereum/beacon/engine"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/eth"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/rpc"
-	"github.com/ethereum/go-ethereum/trie"
 
 	boostTypes "github.com/flashbots/go-boost-utils/types"
 )
 
 // Register adds catalyst APIs to the full node.
-func Register(stack *node.Node, backend *eth.Ethereum, ctx *cli.Context) error {
+func Register(stack *node.Node, backend *eth.Ethereum) error {
 	stack.RegisterAPIs([]rpc.API{
 		{
 			Namespace: "flashbots",
@@ -85,12 +84,6 @@ func (api *BlockValidationAPI) ValidateBuilderSubmissionV1(params *BuilderBlockV
 	if err != nil {
 		log.Error("invalid payload", "hash", payload.BlockHash.String(), "number", payload.BlockNumber, "parentHash", payload.ParentHash.String(), "err", err)
 		return err
-	}
-
-	if api.accessVerifier != nil && tracer != nil {
-		if err := api.accessVerifier.verifyTraces(tracer); err != nil {
-			return err
-		}
 	}
 
 	log.Info("validated block", "hash", block.Hash(), "number", block.NumberU64(), "parentHash", block.ParentHash())
@@ -162,22 +155,6 @@ func (api *BlockValidationAPI) ValidateBuilderSubmissionV2(params *BuilderBlockV
 	expectedProfit := params.Message.Value.ToBig()
 
 	var vmconfig vm.Config
-	var tracer *logger.AccessListTracer = nil
-	if api.accessVerifier != nil {
-		if err := api.accessVerifier.isBlacklisted(block.Coinbase()); err != nil {
-			return err
-		}
-		if err := api.accessVerifier.isBlacklisted(feeRecipient); err != nil {
-			return err
-		}
-		if err := api.accessVerifier.verifyTransactions(types.LatestSigner(api.eth.BlockChain().Config()), block.Transactions()); err != nil {
-			return err
-		}
-		isPostMerge := true // the call is PoS-native
-		precompiles := vm.ActivePrecompiles(api.eth.APIBackend.ChainConfig().Rules(new(big.Int).SetUint64(params.ExecutionPayload.BlockNumber), isPostMerge, params.ExecutionPayload.Timestamp))
-		tracer = logger.NewAccessListTracer(nil, common.Address{}, common.Address{}, precompiles)
-		vmconfig = vm.Config{Tracer: tracer, Debug: true}
-	}
 
 	err = api.eth.BlockChain().ValidatePayload(block, feeRecipient, expectedProfit, params.RegisteredGasLimit, vmconfig)
 	if err != nil {
