@@ -204,9 +204,6 @@ func makeFullNode(ctx *cli.Context) (*node.Node, ethapi.Backend) {
 	filterSystem := utils.RegisterFilterAPI(stack, backend, &cfg.Eth)
 
 	bvConfig := blockvalidationapi.BlockValidationConfig{}
-	if ctx.IsSet(utils.BuilderBlockValidationBlacklistSourceFilePath.Name) {
-		bvConfig.BlacklistSourceFilePath = ctx.String(utils.BuilderBlockValidationBlacklistSourceFilePath.Name)
-	}
 	if ctx.IsSet(utils.BuilderBlockValidationUseBalanceDiff.Name) {
 		bvConfig.UseBalanceDiffProfit = ctx.Bool(utils.BuilderBlockValidationUseBalanceDiff.Name)
 	}

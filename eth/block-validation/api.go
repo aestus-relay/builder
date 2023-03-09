@@ -1,6 +1,7 @@
 package blockvalidation
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 
@@ -11,7 +12,6 @@ import (
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/ethereum/go-ethereum/beacon/engine"
 	"github.com/ethereum/go-ethereum/common"
-	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto/kzg4844"
 	"github.com/ethereum/go-ethereum/eth"
@@ -21,7 +21,7 @@ import (
 )
 
 // Register adds catalyst APIs to the full node.
-func Register(stack *node.Node, backend *eth.Ethereum, ctx *cli.Context) error {
+func Register(stack *node.Node, backend *eth.Ethereum) error {
 	stack.RegisterAPIs([]rpc.API{
 		{
 			Namespace: "flashbots",
@@ -203,22 +203,6 @@ func (api *BlockValidationAPI) validateBlock(block *types.Block, msg *builderApi
 	expectedProfit := msg.Value.ToBig()
 
 	var vmconfig vm.Config
-	var tracer *logger.AccessListTracer = nil
-	if api.accessVerifier != nil {
-		if err := api.accessVerifier.isBlacklisted(block.Coinbase()); err != nil {
-			return err
-		}
-		if err := api.accessVerifier.isBlacklisted(feeRecipient); err != nil {
-			return err
-		}
-		if err := api.accessVerifier.verifyTransactions(types.LatestSigner(api.eth.BlockChain().Config()), block.Transactions()); err != nil {
-			return err
-		}
-		isPostMerge := true // the call is PoS-native
-		precompiles := vm.ActivePrecompiles(api.eth.APIBackend.ChainConfig().Rules(new(big.Int).SetUint64(block.NumberU64()), isPostMerge, block.Time()))
-		tracer = logger.NewAccessListTracer(nil, common.Address{}, common.Address{}, precompiles)
-		vmconfig = vm.Config{Tracer: tracer}
-	}
 
 	err := api.eth.BlockChain().ValidatePayload(block, feeRecipient, expectedProfit, registeredGasLimit, vmconfig, api.useBalanceDiffProfit)
 	if err != nil {
