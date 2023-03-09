@@ -155,16 +155,6 @@ func Register(stack *node.Node, backend *eth.Ethereum, cfg *Config) error {
 	}
 
 	var validator *blockvalidation.BlockValidationAPI
-	if cfg.DryRun {
-		var accessVerifier *blockvalidation.AccessVerifier
-		if cfg.ValidationBlocklist != "" {
-			accessVerifier, err = blockvalidation.NewAccessVerifierFromFile(cfg.ValidationBlocklist)
-			if err != nil {
-				return fmt.Errorf("failed to load validation blocklist %w", err)
-			}
-		}
-		validator = blockvalidation.NewBlockValidationAPI(backend, accessVerifier)
-	}
 
 	// TODO: move to proper flags
 	var ds flashbotsextra.IDatabaseService
