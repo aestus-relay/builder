@@ -86,11 +86,6 @@ func (w *multiWorker) disablePreseal() {
 	}
 }
 
-type resChPair struct {
-	resCh chan *types.Block
-	errCh chan error
-}
-
 func (w *multiWorker) buildPayload(args *BuildPayloadArgs) (*Payload, error) {
 	// Build the initial version with no transaction included. It should be fast
 	// enough to run. The empty payload can at least make sure there is something
@@ -99,12 +94,12 @@ func (w *multiWorker) buildPayload(args *BuildPayloadArgs) (*Payload, error) {
 	for _, worker := range w.workers {
 		var err error
 		empty, _, err = worker.getSealingBlock(args.Parent, args.Timestamp, args.FeeRecipient, args.GasLimit, args.Random, args.Withdrawals, true, nil)
-			if err != nil {
+		if err != nil {
 			log.Error("could not start async block construction", "isFlashbotsWorker", worker.flashbots.isFlashbots, "#bundles", worker.flashbots.maxMergedBundles)
 			continue
-			}
+		}
 		break
-			}
+	}
 
 	if empty == nil {
 		return nil, errors.New("no worker could build an empty block")
@@ -130,20 +125,26 @@ func (w *multiWorker) buildPayload(args *BuildPayloadArgs) (*Payload, error) {
 			block, fees, err := w.getSealingBlock(args.Parent, args.Timestamp, args.FeeRecipient, args.GasLimit, args.Random, args.Withdrawals, false, args.BlockHook)
 			if err == nil {
 				workerPayload.update(block, fees, time.Since(start))
+			} else {
+				log.Error("Error while sealing block", "err", err)
+				workerPayload.Cancel()
 			}
 		}(w)
 	}
-	
+
 	go payload.resolveBestFullPayload(workerPayloads)
 
 	return payload, nil
 }
 
 func newMultiWorker(config *Config, chainConfig *params.ChainConfig, engine consensus.Engine, eth Backend, mux *event.TypeMux, isLocalBlock func(header *types.Header) bool, init bool) *multiWorker {
-	if config.AlgoType != ALGO_MEV_GETH {
-		return newMultiWorkerGreedy(config, chainConfig, engine, eth, mux, isLocalBlock, init)
-	} else {
+	switch config.AlgoType {
+	case ALGO_MEV_GETH:
 		return newMultiWorkerMevGeth(config, chainConfig, engine, eth, mux, isLocalBlock, init)
+	case ALGO_GREEDY, ALGO_GREEDY_BUCKETS:
+		return newMultiWorkerGreedy(config, chainConfig, engine, eth, mux, isLocalBlock, init)
+	default:
+		panic("unsupported builder algorithm found")
 	}
 }
 

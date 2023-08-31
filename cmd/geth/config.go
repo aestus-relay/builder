@@ -173,7 +173,12 @@ func makeFullNode(ctx *cli.Context) (*node.Node, ethapi.Backend) {
 	// Configure log filter RPC API.
 	filterSystem := utils.RegisterFilterAPI(stack, backend, &cfg.Eth)
 
-	if err := blockvalidationapi.Register(stack, eth); err != nil {
+	bvConfig := blockvalidationapi.BlockValidationConfig{}
+	if ctx.IsSet(utils.BuilderBlockValidationUseBalanceDiff.Name) {
+		bvConfig.UseBalanceDiffProfit = ctx.Bool(utils.BuilderBlockValidationUseBalanceDiff.Name)
+	}
+
+	if err := blockvalidationapi.Register(stack, eth, bvConfig); err != nil {
 		utils.Fatalf("Failed to register the Block Validation API: %v", err)
 	}
 

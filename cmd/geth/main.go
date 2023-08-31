@@ -158,21 +158,31 @@ var (
 
 	builderApiFlags = []cli.Flag{
 		utils.BuilderEnabled,
+		utils.BuilderAlgoTypeFlag,
+		utils.BuilderPriceCutoffPercentFlag,
 		utils.BuilderEnableValidatorChecks,
+		utils.BuilderBlockValidationUseBalanceDiff,
 		utils.BuilderEnableLocalRelay,
 		utils.BuilderSecondsInSlot,
 		utils.BuilderSlotsInEpoch,
 		utils.BuilderDisableBundleFetcher,
 		utils.BuilderDryRun,
+		utils.BuilderIgnoreLatePayloadAttributes,
 		utils.BuilderSecretKey,
 		utils.BuilderRelaySecretKey,
 		utils.BuilderListenAddr,
 		utils.BuilderGenesisForkVersion,
 		utils.BuilderBellatrixForkVersion,
 		utils.BuilderGenesisValidatorsRoot,
-		utils.BuilderBeaconEndpoint,
+		utils.BuilderBeaconEndpoints,
 		utils.BuilderRemoteRelayEndpoint,
 		utils.BuilderSecondaryRemoteRelayEndpoints,
+		utils.BuilderRateLimitDuration,
+		utils.BuilderRateLimitMaxBurst,
+		utils.BuilderBlockResubmitInterval,
+		utils.BuilderSubmissionOffset,
+		utils.BuilderDiscardRevertibleTxOnErr,
+		utils.BuilderEnableCancellations,
 	}
 
 	rpcFlags = []cli.Flag{

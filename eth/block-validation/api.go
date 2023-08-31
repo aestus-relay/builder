@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 
+	bellatrixapi "github.com/attestantio/go-builder-client/api/bellatrix"
 	capellaapi "github.com/attestantio/go-builder-client/api/capella"
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/ethereum/go-ethereum/beacon/engine"
@@ -14,35 +15,41 @@ import (
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/rpc"
-
-	boostTypes "github.com/flashbots/go-boost-utils/types"
 )
 
+type BlockValidationConfig struct {
+	// If set to true, proposer payment is calculated as a balance difference of the fee recipient.
+	UseBalanceDiffProfit bool
+}
+
 // Register adds catalyst APIs to the full node.
-func Register(stack *node.Node, backend *eth.Ethereum) error {
+func Register(stack *node.Node, backend *eth.Ethereum, cfg BlockValidationConfig) error {
 	stack.RegisterAPIs([]rpc.API{
 		{
 			Namespace: "flashbots",
-			Service:   NewBlockValidationAPI(backend),
+			Service:   NewBlockValidationAPI(backend, cfg.UseBalanceDiffProfit),
 		},
 	})
 	return nil
 }
 
 type BlockValidationAPI struct {
-	eth *eth.Ethereum
+	eth            *eth.Ethereum
+	// If set to true, proposer payment is calculated as a balance difference of the fee recipient.
+	useBalanceDiffProfit bool
 }
 
 // NewConsensusAPI creates a new consensus api for the given backend.
 // The underlying blockchain needs to have a valid terminal total difficulty set.
-func NewBlockValidationAPI(eth *eth.Ethereum) *BlockValidationAPI {
+func NewBlockValidationAPI(eth *eth.Ethereum, useBalanceDiffProfit bool) *BlockValidationAPI {
 	return &BlockValidationAPI{
-		eth: eth,
+		eth:                  eth,
+		useBalanceDiffProfit: useBalanceDiffProfit,
 	}
 }
 
 type BuilderBlockValidationRequest struct {
-	boostTypes.BuilderSubmitBlockRequest
+	bellatrixapi.SubmitBlockRequest
 	RegisteredGasLimit uint64 `json:"registered_gas_limit,string"`
 }
 
@@ -59,11 +66,11 @@ func (api *BlockValidationAPI) ValidateBuilderSubmissionV1(params *BuilderBlockV
 		return err
 	}
 
-	if params.Message.ParentHash != boostTypes.Hash(block.ParentHash()) {
+	if params.Message.ParentHash != phase0.Hash32(block.ParentHash()) {
 		return fmt.Errorf("incorrect ParentHash %s, expected %s", params.Message.ParentHash.String(), block.ParentHash().String())
 	}
 
-	if params.Message.BlockHash != boostTypes.Hash(block.Hash()) {
+	if params.Message.BlockHash != phase0.Hash32(block.Hash()) {
 		return fmt.Errorf("incorrect BlockHash %s, expected %s", params.Message.BlockHash.String(), block.Hash().String())
 	}
 
@@ -76,11 +83,11 @@ func (api *BlockValidationAPI) ValidateBuilderSubmissionV1(params *BuilderBlockV
 	}
 
 	feeRecipient := common.BytesToAddress(params.Message.ProposerFeeRecipient[:])
-	expectedProfit := params.Message.Value.BigInt()
+	expectedProfit := params.Message.Value.ToBig()
 
 	var vmconfig vm.Config
 
-	err = api.eth.BlockChain().ValidatePayload(block, feeRecipient, expectedProfit, params.RegisteredGasLimit, vmconfig)
+	err = api.eth.BlockChain().ValidatePayload(block, feeRecipient, expectedProfit, params.RegisteredGasLimit, vmconfig, api.useBalanceDiffProfit)
 	if err != nil {
 		log.Error("invalid payload", "hash", payload.BlockHash.String(), "number", payload.BlockNumber, "parentHash", payload.ParentHash.String(), "err", err)
 		return err
@@ -129,12 +136,6 @@ func (api *BlockValidationAPI) ValidateBuilderSubmissionV2(params *BuilderBlockV
 		return err
 	}
 
-	// validated at the relay
-	// isShanghai := api.eth.BlockChain().Config().IsShanghai(params.ExecutionPayload.Timestamp)
-	// if err := verifyWithdrawals(block.Withdrawals(), params.WithdrawalsRoot, isShanghai); err != nil {
-	// 	return err
-	// }
-
 	if params.Message.ParentHash != phase0.Hash32(block.ParentHash()) {
 		return fmt.Errorf("incorrect ParentHash %s, expected %s", params.Message.ParentHash.String(), block.ParentHash().String())
 	}
@@ -156,7 +157,7 @@ func (api *BlockValidationAPI) ValidateBuilderSubmissionV2(params *BuilderBlockV
 
 	var vmconfig vm.Config
 
-	err = api.eth.BlockChain().ValidatePayload(block, feeRecipient, expectedProfit, params.RegisteredGasLimit, vmconfig)
+	err = api.eth.BlockChain().ValidatePayload(block, feeRecipient, expectedProfit, params.RegisteredGasLimit, vmconfig, api.useBalanceDiffProfit)
 	if err != nil {
 		log.Error("invalid payload", "hash", payload.BlockHash.String(), "number", payload.BlockNumber, "parentHash", payload.ParentHash.String(), "err", err)
 		return err
