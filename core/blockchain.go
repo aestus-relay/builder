@@ -2472,7 +2472,7 @@ func (bc *BlockChain) ValidatePayload(block *types.Block, feeRecipient common.Ad
 
 	calculatedGasLimit := CalcGasLimit(parent.GasLimit, registeredGasLimit)
 	if calculatedGasLimit != header.GasLimit {
-		return errors.New("incorrect gas limit set")
+                return fmt.Errorf("incorrect gas limit set, expected: %d, header: %d", calculatedGasLimit, header.GasLimit)
 	}
 
 	statedb, err := bc.StateAt(parent.Root)
