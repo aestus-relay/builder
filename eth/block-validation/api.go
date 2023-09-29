@@ -121,11 +121,13 @@ func (api *BlockValidationAPI) ValidateBuilderSubmissionV2(params *BuilderBlockV
 	// TODO: fuzztest, make sure the validation is sound
 	// TODO: handle context!
 	if params.ExecutionPayload == nil {
+		log.Error("nil execution payload")
 		return errors.New("nil execution payload")
 	}
 	payload := params.ExecutionPayload
 	block, err := engine.ExecutionPayloadV2ToBlock(payload)
 	if err != nil {
+		log.Error("Could not convert payload to block", "err", err)
 		return err
 	}
 
@@ -192,6 +194,7 @@ func (api *BlockValidationAPI) validateBlock(block *types.Block, msg *builderApi
 	}
 
 	if msg.GasLimit != block.GasLimit() {
+		log.Error("incorrect GasLimit", "got", params.Message.GasLimit, "expected", block.GasLimit())
 		return fmt.Errorf("incorrect GasLimit %d, expected %d", msg.GasLimit, block.GasLimit())
 	}
 
