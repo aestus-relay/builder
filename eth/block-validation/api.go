@@ -128,27 +128,33 @@ func (api *BlockValidationAPI) ValidateBuilderSubmissionV2(params *BuilderBlockV
 	// TODO: fuzztest, make sure the validation is sound
 	// TODO: handle context!
 	if params.ExecutionPayload == nil {
+		log.Error("nil execution payload")
 		return errors.New("nil execution payload")
 	}
 	payload := params.ExecutionPayload
 	block, err := engine.ExecutionPayloadV2ToBlock(payload)
 	if err != nil {
+		log.Error("Could not convert payload to block", "err", err)
 		return err
 	}
 
 	if params.Message.ParentHash != phase0.Hash32(block.ParentHash()) {
+		log.Error("incorrect ParentHash", "got", params.Message.ParentHash.String(), "expected", block.ParentHash().String())
 		return fmt.Errorf("incorrect ParentHash %s, expected %s", params.Message.ParentHash.String(), block.ParentHash().String())
 	}
 
 	if params.Message.BlockHash != phase0.Hash32(block.Hash()) {
+		log.Error("incorrect BlockHash", "got", params.Message.BlockHash.String(), "expected", block.Hash().String())
 		return fmt.Errorf("incorrect BlockHash %s, expected %s", params.Message.BlockHash.String(), block.Hash().String())
 	}
 
 	if params.Message.GasLimit != block.GasLimit() {
+		log.Error("incorrect GasLimit", "got", params.Message.GasLimit, "expected", block.GasLimit())
 		return fmt.Errorf("incorrect GasLimit %d, expected %d", params.Message.GasLimit, block.GasLimit())
 	}
 
 	if params.Message.GasUsed != block.GasUsed() {
+		log.Error("incorrect GasUsed", "got", params.Message.GasUsed, "expected", block.GasUsed())
 		return fmt.Errorf("incorrect GasUsed %d, expected %d", params.Message.GasUsed, block.GasUsed())
 	}
 

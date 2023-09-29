@@ -2501,7 +2501,7 @@ func (bc *BlockChain) SetBlockValidatorAndProcessorForTesting(v Validator, p Pro
 func (bc *BlockChain) ValidatePayload(block *types.Block, feeRecipient common.Address, expectedProfit *big.Int, registeredGasLimit uint64, vmConfig vm.Config, useBalanceDiffProfit bool) error {
 	header := block.Header()
 	if err := bc.engine.VerifyHeader(bc, header, true); err != nil {
-		return err
+		return fmt.Errorf("invalid block header: %w", err)
 	}
 
 	current := bc.CurrentBlock()
@@ -2522,7 +2522,7 @@ func (bc *BlockChain) ValidatePayload(block *types.Block, feeRecipient common.Ad
 
 	statedb, err := bc.StateAt(parent.Root)
 	if err != nil {
-		return err
+		return fmt.Errorf("can't access state: %w", err)
 	}
 
 	// The chain importer is starting and stopping trie prefetchers. If a bad
@@ -2535,7 +2535,7 @@ func (bc *BlockChain) ValidatePayload(block *types.Block, feeRecipient common.Ad
 
 	receipts, _, usedGas, err := bc.processor.Process(block, statedb, vmConfig)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to process block: %w", err)
 	}
 
 	feeRecipientBalanceDelta := new(big.Int).Set(statedb.GetBalance(feeRecipient))
@@ -2556,11 +2556,11 @@ func (bc *BlockChain) ValidatePayload(block *types.Block, feeRecipient common.Ad
 	}
 
 	if err := bc.validator.ValidateBody(block); err != nil {
-		return err
+		return fmt.Errorf("failed to validate block body: %w", err)
 	}
 
 	if err := bc.validator.ValidateState(block, statedb, receipts, usedGas); err != nil {
-		return err
+		return fmt.Errorf("failed to validate block state: %w", err)
 	}
 
 	// Validate proposer payment
