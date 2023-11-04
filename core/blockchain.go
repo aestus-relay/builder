@@ -29,6 +29,8 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/attestantio/go-eth2-client/spec/phase0"
+	"github.com/ethereum/go-ethereum/accounts/abi"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/lru"
 	"github.com/ethereum/go-ethereum/common/mclock"
@@ -2498,7 +2500,7 @@ func (bc *BlockChain) SetBlockValidatorAndProcessorForTesting(v Validator, p Pro
 // It returns nil if the payload is valid, otherwise it returns an error.
 //   - `useBalanceDiffProfit` if set to false, proposer payment is assumed to be in the last transaction of the block
 //     otherwise we use proposer balance changes after the block to calculate proposer payment (see details in the code)
-func (bc *BlockChain) ValidatePayload(block *types.Block, feeRecipient common.Address, expectedProfit *big.Int, registeredGasLimit uint64, vmConfig vm.Config, useBalanceDiffProfit bool) error {
+func (bc *BlockChain) ValidatePayload(block *types.Block, feeRecipient common.Address, expectedProfit *big.Int, registeredGasLimit uint64, vmConfig vm.Config, useBalanceDiffProfit bool, builderPubkey phase0.BLSPubKey) error {
 	header := block.Header()
 	if err := bc.engine.VerifyHeader(bc, header, true); err != nil {
 		return fmt.Errorf("invalid block header: %w", err)
@@ -2618,6 +2620,12 @@ func (bc *BlockChain) ValidatePayload(block *types.Block, feeRecipient common.Ad
 		return fmt.Errorf("malformed proposer payment, unexpected gas fee cap")
 	}
 
+	// Validate relay guild collateral
+	err = bc.ValidateCollateral(block, builderPubkey)
+	if err != nil {
+		return fmt.Errorf("collateral check failed: %w", err)
+	}
+
 	return nil
 }
 
@@ -2627,3 +2635,70 @@ func (bc *BlockChain) ValidatePayload(block *types.Block, feeRecipient common.Ad
 func (bc *BlockChain) SetTrieFlushInterval(interval time.Duration) {
 	atomic.StoreInt64(&bc.flushInterval, int64(interval))
 }
+
+func (bc *BlockChain) ValidateCollateral(block *types.Block, BuilderPubkey phase0.BLSPubKey) error {
+	// Set up EVM
+	parent := bc.GetHeader(block.ParentHash(), block.NumberU64()-1)
+	if parent == nil {
+		return errors.New("parent not found")
+	}
+
+	// Use parent state, could be changed to state after block execution
+	// if we want builders to be able to provide collateral in their block
+	statedb, err := bc.StateAt(parent.Root)
+	if err != nil {
+		return fmt.Errorf("can't access state: %w", err)
+	}
+
+	blockContext := NewEVMBlockContext(block.Header(), bc, nil)
+	vmenv := vm.NewEVM(blockContext, vm.TxContext{}, statedb, bc.chainConfig, vm.Config{NoBaseFee: true})
+
+	// Set up misc call parameters
+	collateralAddr := common.HexToAddress("0x62BC478FFC429161115A6E4090f819CE5C50A5d9") // TBD
+	callerAddr := common.HexToAddress("0x9Be3570F5454fd668673fEb9C43805C533e53FFD") // Can be whatever lol
+	caller := vm.AccountRef(callerAddr)
+	maxGas := uint64(1000000) // TBD
+	value := big.NewInt(0)
+
+	// Construct input
+	parsedInput, err := abi.JSON(strings.NewReader(`[
+		{
+			"name": "getEthValue",
+			"type": "function",
+			"inputs": [{"name": "_ethAmount", "type": "uint256"}],
+			"outputs": [{"name": "value", "type": "uint256"}],
+			"stateMutability": "view"
+		}
+	]`))
+	if err != nil {
+		return err
+	}
+
+	// input, err := parsedInput.Pack("getCollateral", builderPubkey.String())
+	input, err := parsedInput.Pack("getEthValue", big.NewInt(1000000000000000000))
+
+	// Execute
+	ret, _, err := vmenv.Call(caller, collateralAddr, input, maxGas, value)
+	if err != nil {
+		return err
+	}
+
+	// Parse output
+	var output struct {
+		Collateral *big.Int
+	}
+	err = parsedInput.UnpackIntoInterface(&output, "getEthValue", ret)
+	if err != nil {
+		return err
+	}
+
+	// Check if collateral is sufficient (>1 ETH)
+	// This should always be true for the RPL test call
+	if output.Collateral.Cmp(big.NewInt(1000000000000000000)) < 0 {
+		return fmt.Errorf("insufficient collateral: %s", output.Collateral.String())
+	} else {
+		log.Info("TEST got contract value", "getEthValue", output.Collateral.String())
+		return nil
+	}
+}
+
