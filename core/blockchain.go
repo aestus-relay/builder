@@ -123,6 +123,8 @@ const (
 	//  The following incompatible database changes were added:
 	//    * New scheme for contract code in order to separate the codes and trie nodes
 	BlockChainVersion uint64 = 8
+
+	defaultGasLimit = 30000000
 )
 
 // CacheConfig contains the configuration values for the trie database
@@ -2516,7 +2518,7 @@ func (bc *BlockChain) ValidatePayload(block *types.Block, feeRecipient common.Ad
 	}
 
 	calculatedGasLimit := utils.CalcGasLimit(parent.GasLimit, registeredGasLimit)
-	if calculatedGasLimit != header.GasLimit {
+	if header.GasLimit != calculatedGasLimit && header.GasLimit != defaultGasLimit  {
                 return fmt.Errorf("incorrect gas limit set, expected: %d, header: %d", calculatedGasLimit, header.GasLimit)
 	}
 
