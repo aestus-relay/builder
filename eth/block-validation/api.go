@@ -12,6 +12,7 @@ import (
 	"github.com/attestantio/go-eth2-client/spec/phase0"
 	"github.com/ethereum/go-ethereum/beacon/engine"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/core/vm"
 	"github.com/ethereum/go-ethereum/crypto/kzg4844"
 	"github.com/ethereum/go-ethereum/eth"
@@ -20,8 +21,13 @@ import (
 	"github.com/ethereum/go-ethereum/rpc"
 )
 
+type BlockValidationConfig struct {
+	// If set to true, proposer payment is calculated as a balance difference of the fee recipient.
+	UseBalanceDiffProfit bool
+}
+
 // Register adds catalyst APIs to the full node.
-func Register(stack *node.Node, backend *eth.Ethereum) error {
+func Register(stack *node.Node, backend *eth.Ethereum, cfg BlockValidationConfig) error {
 	stack.RegisterAPIs([]rpc.API{
 		{
 			Namespace: "flashbots",
@@ -39,7 +45,7 @@ type BlockValidationAPI struct {
 
 // NewConsensusAPI creates a new consensus api for the given backend.
 // The underlying blockchain needs to have a valid terminal total difficulty set.
-func NewBlockValidationAPI(eth *eth.Ethereum, accessVerifier *AccessVerifier, useBalanceDiffProfit bool) *BlockValidationAPI {
+func NewBlockValidationAPI(eth *eth.Ethereum, useBalanceDiffProfit bool) *BlockValidationAPI {
 	return &BlockValidationAPI{
 		eth:                  eth,
 		useBalanceDiffProfit: useBalanceDiffProfit,
@@ -62,35 +68,7 @@ func (api *BlockValidationAPI) ValidateBuilderSubmissionV1(params *BuilderBlockV
 		return err
 	}
 
-	if params.Message.ParentHash != boostTypes.Hash(block.ParentHash()) {
-		return fmt.Errorf("incorrect ParentHash %s, expected %s", params.Message.ParentHash.String(), block.ParentHash().String())
-	}
-
-	if params.Message.BlockHash != boostTypes.Hash(block.Hash()) {
-		return fmt.Errorf("incorrect BlockHash %s, expected %s", params.Message.BlockHash.String(), block.Hash().String())
-	}
-
-	if params.Message.GasLimit != block.GasLimit() {
-		return fmt.Errorf("incorrect GasLimit %d, expected %d", params.Message.GasLimit, block.GasLimit())
-	}
-
-	if params.Message.GasUsed != block.GasUsed() {
-		return fmt.Errorf("incorrect GasUsed %d, expected %d", params.Message.GasUsed, block.GasUsed())
-	}
-
-	feeRecipient := common.BytesToAddress(params.Message.ProposerFeeRecipient[:])
-	expectedProfit := params.Message.Value.BigInt()
-
-	var vmconfig vm.Config
-
-	err = api.eth.BlockChain().ValidatePayload(block, feeRecipient, expectedProfit, params.RegisteredGasLimit, vmconfig)
-	if err != nil {
-		log.Error("invalid payload", "hash", payload.BlockHash.String(), "number", payload.BlockNumber, "parentHash", payload.ParentHash.String(), "err", err)
-		return err
-	}
-
-	log.Info("validated block", "hash", block.Hash(), "number", block.NumberU64(), "parentHash", block.ParentHash())
-	return nil
+	return api.validateBlock(block, params.Message, params.RegisteredGasLimit)
 }
 
 type BuilderBlockValidationRequestV2 struct {
@@ -194,7 +172,7 @@ func (api *BlockValidationAPI) validateBlock(block *types.Block, msg *builderApi
 	}
 
 	if msg.GasLimit != block.GasLimit() {
-		log.Error("incorrect GasLimit", "got", params.Message.GasLimit, "expected", block.GasLimit())
+		log.Error("incorrect GasLimit", "got", msg.GasLimit, "expected", block.GasLimit())
 		return fmt.Errorf("incorrect GasLimit %d, expected %d", msg.GasLimit, block.GasLimit())
 	}
 

@@ -2455,7 +2455,7 @@ func (bc *BlockChain) SetBlockValidatorAndProcessorForTesting(v Validator, p Pro
 //     otherwise we use proposer balance changes after the block to calculate proposer payment (see details in the code)
 func (bc *BlockChain) ValidatePayload(block *types.Block, feeRecipient common.Address, expectedProfit *big.Int, registeredGasLimit uint64, vmConfig vm.Config, useBalanceDiffProfit bool) error {
 	header := block.Header()
-	if err := bc.engine.VerifyHeader(bc, header, true); err != nil {
+	if err := bc.engine.VerifyHeader(bc, header); err != nil {
 		return fmt.Errorf("invalid block header: %w", err)
 	}
 
