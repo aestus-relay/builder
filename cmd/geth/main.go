@@ -159,6 +159,7 @@ var (
 		utils.BuilderPriceCutoffPercentFlag,
 		utils.BuilderEnableValidatorChecks,
 		utils.BuilderBlockValidationUseBalanceDiff,
+		utils.BuilderBlockValidationExcludeWithdrawals,
 		utils.BuilderEnableLocalRelay,
 		utils.BuilderSecondsInSlot,
 		utils.BuilderSlotsInEpoch,

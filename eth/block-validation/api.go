@@ -24,6 +24,8 @@ import (
 type BlockValidationConfig struct {
 	// If set to true, proposer payment is calculated as a balance difference of the fee recipient.
 	UseBalanceDiffProfit bool
+	// If set to true, withdrawals to the fee recipient are excluded from the balance difference.
+	ExcludeWithdrawals bool
 }
 
 // Register adds catalyst APIs to the full node.
@@ -31,7 +33,7 @@ func Register(stack *node.Node, backend *eth.Ethereum, cfg BlockValidationConfig
 	stack.RegisterAPIs([]rpc.API{
 		{
 			Namespace: "flashbots",
-			Service:   NewBlockValidationAPI(backend, cfg.UseBalanceDiffProfit),
+			Service:   NewBlockValidationAPI(backend, cfg.UseBalanceDiffProfit, cfg.ExcludeWithdrawals),
 		},
 	})
 	return nil
@@ -41,14 +43,17 @@ type BlockValidationAPI struct {
 	eth            *eth.Ethereum
 	// If set to true, proposer payment is calculated as a balance difference of the fee recipient.
 	useBalanceDiffProfit bool
+	// If set to true, withdrawals to the fee recipient are excluded from the balance delta.
+	excludeWithdrawals bool
 }
 
 // NewConsensusAPI creates a new consensus api for the given backend.
 // The underlying blockchain needs to have a valid terminal total difficulty set.
-func NewBlockValidationAPI(eth *eth.Ethereum, useBalanceDiffProfit bool) *BlockValidationAPI {
+func NewBlockValidationAPI(eth *eth.Ethereum, useBalanceDiffProfit, excludeWithdrawals bool) *BlockValidationAPI {
 	return &BlockValidationAPI{
 		eth:                  eth,
 		useBalanceDiffProfit: useBalanceDiffProfit,
+		excludeWithdrawals:   excludeWithdrawals,
 	}
 }
 
@@ -185,7 +190,7 @@ func (api *BlockValidationAPI) validateBlock(block *types.Block, msg *builderApi
 
 	var vmconfig vm.Config
 
-	err := api.eth.BlockChain().ValidatePayload(block, feeRecipient, expectedProfit, registeredGasLimit, vmconfig, api.useBalanceDiffProfit)
+	err := api.eth.BlockChain().ValidatePayload(block, feeRecipient, expectedProfit, registeredGasLimit, vmconfig, api.useBalanceDiffProfit, api.excludeWithdrawals)
 	if err != nil {
 		return err
 	}
